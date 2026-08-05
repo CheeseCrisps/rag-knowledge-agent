@@ -11,6 +11,7 @@ from core.llm import llm
 from core.rag import process_and_store_pdf, query_relevant_context
 from database import get_db, ChatMessage
 
+# RAG 知识库 Agent 系统 API 入口
 app = FastAPI(
     title=" RAG 知识库 Agent 系统 API",
     version="1.0.0",
