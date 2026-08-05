@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title> RAG 知识库 Agent 系统</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+
+        body {
+            display: flex;
+            height: 100vh;
+            background-color: #f4f6f8;
+            color: #333;
+        }
+
+        /* 侧边栏样式 */
+        .sidebar {
+            width: 300px;
+            background-color: #ffffff;
+            border-right: 1px solid #e5e7eb;
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            justify-content: space-between;
+        }
+
+        .panel-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #1f2937;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .upload-card {
+            border: 2px dashed #3b82f6;
+            border-radius: 8px;
+            padding: 20px;
+            text-align: center;
+            background-color: #eff6ff;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .upload-card:hover {
+            background-color: #dbeafe;
+        }
+
+        .upload-card input[type="file"] {
+            display: none;
+        }
+
+        .file-label {
+            cursor: pointer;
+            color: #2563eb;
+            font-weight: 500;
+        }
+
+        .btn {
+            width: 100%;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            margin-top: 12px;
+        }
+
+        .btn-primary {
+            background-color: #2563eb;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: #1d4ed8;
+        }
+
+        .btn-danger {
+            background-color: #ef4444;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background-color: #dc2626;
+        }
+
+        .status-msg {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #4b5563;
+            word-break: break-all;
+        }
+
+        /* 主聊天区域样式 */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .chat-header {
+            padding: 16px 24px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            font-size: 18px;
+            font-weight: bold;
+            color: #111827;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .chat-box {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            display: flex;
+            flex-direction: column;
+            max-width: 75%;
+        }
+
+        .message.user {
+            align-self: flex-end;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+        }
+
+        .bubble {
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .user .bubble {
+            background-color: #2563eb;
+            color: white;
+            border-bottom-right-radius: 2px;
+        }
+
+        .assistant .bubble {
+            background-color: #ffffff;
+            color: #1f2937;
+            border: 1px solid #e5e7eb;
+            border-bottom-left-radius: 2px;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+        }
+
+        .chunks-ref {
+            margin-top: 6px;
+            padding: 8px 12px;
+            background-color: #f3f4f6;
+            border-left: 3px solid #3b82f6;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #4b5563;
+        }
+
+        /* 输入框区域 */
+        .input-area {
+            padding: 16px 24px;
+            background-color: #ffffff;
+            border-top: 1px solid #e5e7eb;
+            display: flex;
+            gap: 12px;
+        }
+
+        .input-area input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-area input:focus {
+            border-color: #2563eb;
+        }
+
+        .input-area button {
+            padding: 12px 24px;
+            background-color: #2563eb;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+
+        .input-area button:hover {
+            background-color: #1d4ed8;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 侧边栏：知识库管理与数据清理 -->
+    <div class="sidebar">
+        <div>
+            <div class="panel-title">📄 知识库文档导入</div>
+            <div class="upload-card">
+                <label for="pdfFile" class="file-label" id="fileLabel">📁 点击选择 PDF 文件</label>
+                <input type="file" id="pdfFile" accept=".pdf" onchange="updateFileName()">
+            </div>
+            <button class="btn btn-primary" onclick="uploadPDF()">上传并写入知识库</button>
+            <div class="status-msg" id="uploadStatus"></div>
+        </div>
+
+        <div>
+            <button class="btn btn-danger" onclick="clearHistory()">🗑️ 清空历史对话记录</button>
+        </div>
+    </div>
+
+    <!-- 主界面：聊天交互区 -->
+    <div class="chat-container">
+        <div class="chat-header">
+            🤖  RAG 知识库智能 AI 助手
+        </div>
+
+        <div class="chat-box" id="chatBox">
+            <!-- 历史记录与当前消息流将动态插入到这里 -->
+        </div>
+
+        <div class="input-area">
+            <input type="text" id="userInput" placeholder="请输入你的问题（如询问 PDF 内容或常规闲聊）..." onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">发送</button>
+        </div>
+    </div>
+
+    <script>
+        const BACKEND_URL = "http://127.0.0.1:8080";
+
+        // 页面加载完成后自动获取数据库的历史记录
+        window.onload = function() {
+            loadChatHistory();
+        };
+
+        function updateFileName() {
+            const fileInput = document.getElementById('pdfFile');
+            const fileLabel = document.getElementById('fileLabel');
+            if (fileInput.files.length > 0) {
+                fileLabel.innerText = "已选择: " + fileInput.files[0].name;
+            }
+        }
+
+        // 1. 上传 PDF 文件
+        async function uploadPDF() {
+            const fileInput = document.getElementById('pdfFile');
+            const statusDiv = document.getElementById('uploadStatus');
+
+            if (fileInput.files.length === 0) {
+                alert("请先选择要上传的 PDF 文件！");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+
+            statusDiv.innerHTML = "<span style='color: #2563eb;'>正在解析并保存至向量库...</span>";
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/v1/upload-pdf`, {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await response.json();
+
+                if (data.status === "success") {
+                    statusDiv.innerHTML = `<span style='color: #059669;'>✅ ${data.message}</span>`;
+                } else {
+                    statusDiv.innerHTML = `<span style='color: #dc2626;'>❌ ${data.message}</span>`;
+                }
+            } catch (error) {
+                console.error("上传错误:", error);
+                statusDiv.innerHTML = "<span style='color: #dc2626;'>❌ 网络请求失败，请检查后端服务。</span>";
+            }
+        }
+
+        // 2. 加载历史聊天记录
+        async function loadChatHistory() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/v1/history`);
+                const result = await response.json();
+
+                if (result.status === "success" && result.data) {
+                    const chatBox = document.getElementById('chatBox');
+                    chatBox.innerHTML = ""; // 清空
+                    result.data.forEach(msg => {
+                        appendMessage(msg.sender, msg.content);
+                    });
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            } catch (error) {
+                console.error("无法获取历史记录:", error);
+            }
+        }
+
+        // 3. 发送消息（统一对话接口）
+        async function sendMessage() {
+            const inputField = document.getElementById('userInput');
+            const question = inputField.value.trim();
+
+            if (!question) return;
+
+            // 显示用户提问
+            appendMessage("user", question);
+            inputField.value = "";
+
+            // 显示 AI 思考占位符
+            const loadingId = appendMessage("assistant", "🤔 思考中...");
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/v1/rag-chat?question=${encodeURIComponent(question)}`);
+                const data = await response.json();
+
+                // 移除思考占位符
+                document.getElementById(loadingId).remove();
+
+                if (data.status === "success") {
+                    appendMessage("assistant", data.reply, data.retrieved_chunks);
+                } else {
+                    appendMessage("assistant", "⚠️ 响应失败: " + data.message);
+                }
+            } catch (error) {
+                console.error("发送失败:", error);
+                document.getElementById(loadingId).remove();
+                appendMessage("assistant", "❌ 请求失败，请检查后端 Python 服务是否正常。");
+            }
+        }
+
+        // 辅助渲染消息框
+        function appendMessage(sender, text, chunks = []) {
+            const chatBox = document.getElementById('chatBox');
+            const msgDiv = document.createElement('div');
+            const msgId = "msg-" + Date.now();
+            msgDiv.id = msgId;
+            msgDiv.className = `message ${sender}`;
+
+            let chunksHtml = "";
+            if (chunks && chunks.length > 0) {
+                chunksHtml = `<div class="chunks-ref">🔍 <b>参考文档片段：</b><br>${chunks[0].substring(0, 120)}...</div>`;
+            }
+
+            msgDiv.innerHTML = `
+                <div class="bubble">${text}</div>
+                ${chunksHtml}
+            `;
+
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+            return msgId;
+        }
+
+        // 4. 清空历史记录
+        async function clearHistory() {
+            if (!confirm("确定要清空所有历史聊天记录吗？此操作不可恢复。")) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/v1/history`, {
+                    method: 'DELETE'
+                });
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    document.getElementById('chatBox').innerHTML = '';
+                    alert("历史记录已成功清空！");
+                } else {
+                    alert("清空失败: " + data.message);
+                }
+            } catch (error) {
+                console.error("清空历史记录失败:", error);
+                alert("请求失败，请检查后端服务。");
+            }
+        }
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+    </script>
+</body>
+</html>
